@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Cuentas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: white;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+        .header {
+            background-color: #ED7318;
+            color: white;
+            padding: 20px;
+            font-size: 24px;
+        }
+        .btn {
+            background-color: #ED7318;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .status-available {
+            background-color: green;
+            color: white;
+        }
+        .status-sold {
+            background-color: red;
+            color: white;
+        }
+        .response-pending {
+            background-color: red;
+            color: white;
+        }
+        .response-complete {
+            background-color: green;
+            color: white;
+        }
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .hidden {
+            display: none;
+        }
+        .line-separator {
+            border-top: 1px solid #ddd;
+            margin: 10px 0;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(0,0,0);
+            background-color: rgba(0,0,0,0.4);
+            padding-top: 60px;
+        }
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">CONTROL DE CUENTAS</div>
+        <div>
+            <label for="account-data">Datos de la Cuenta:</label>
+            <input type="text" id="account-data">
+        </div>
+        <div>
+            <label for="provider-data">Datos del Proveedor:</label>
+            <input type="text" id="provider-data">
+        </div>
+        <div>
+            <button class="btn" onclick="saveAccount()">Guardar</button>
+        </div>
+        <div>
+            <label for="filter">Filtrar:</label>
+            <input type="text" id="filter" onkeyup="filterAccounts()">
+            <label for="filter-date">Filtrar por Fecha:</label>
+            <input type="date" id="filter-date" onchange="filterAccounts()">
+        </div>
+        <table id="accounts-table">
+            <thead>
+                <tr>
+                    <th>Datos de la Cuenta</th>
+                    <th>Datos del Proveedor</th>
+                    <th>FECHA DE COMPRA DE LA CUENTA VENDE Y GANA</th>
+                    <th>Estado</th>
+                    <th>Datos del Comprador</th>
+                    <th>Fecha de Venta y Vencimiento</th>
+                    <th>Reporte de Falla</th>
+                    <th>Respuesta Falla</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="accounts-body">
+                <!-- Las filas se agregarán aquí -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Modal para el reporte de falla -->
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Reporte de Falla</h2>
+            <label for="failure-report">Reporte de Falla:</label>
+            <input type="text" id="failure-report">
+            <br><br>
+            <button class="btn" onclick="saveFailureReport()">Guardar Reporte de Falla</button>
+            <br><br>
+            <label for="failure-response">Respuesta a la Falla:</label>
+            <input type="text" id="failure-response">
+            <br><br>
+            <label for="executive-name">Ejecutivo que atiende:</label>
+            <select id="executive-name">
+                <option value="THANI">THANI</option>
+                <option value="RICARDO">RICARDO</option>
+                <option value="AIREANA">AIREANA</option>
+                <option value="MILAGROS">MILAGROS</option>
+                <option value="ANTONI">ANTONI</option>
+            </select>
+            <br><br>
+            <button class="btn" onclick="saveFailureResponse()">Guardar Respuesta de Falla</button>
+        </div>
+    </div>
+
+    <!-- Modal para copiar datos -->
+    <div id="copyModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeCopyModal()">&times;</span>
+            <h2>¿Qué deseas copiar?</h2>
+            <button class="btn" onclick="copyAccountData()">Datos de la Cuenta</button>
+            <button class="btn" onclick="copyFailureReport()">Reporte de Falla</button>
+        </div>
+    </div>
+
+    <script>
+        let currentRow;
+        let allRows = [];
+
+        document.addEventListener('DOMContentLoaded', (event) => {
+            loadAccounts();
+        });
+
+        function saveAccount() {
+            const accountData = document.getElementById('account-data').value;
+            const providerData = document.getElementById('provider-data').value;
+            const date = new Date().toLocaleString();
+
+            if (!accountData || !providerData) {
+                alert('Por favor, complete todos los campos antes de guardar.');
+                return;
+            }
+
+            const tableBody = document.getElementById('accounts-body');
+            const newRow = document.createElement('tr');
+
+            newRow.innerHTML = `
+                <td>${accountData}</td>
+                <td>${providerData}</td>
+                <td>${date}</td>
+                <td class="status-available">Disponible</td>
+                <td>
+                    <input type="email" placeholder="Correo del Comprador" oninput="updateStatus(this)">
+                    <input type="tel" placeholder="Teléfono del Comprador">
+                </td>
+                <td></td>
+                <td>
+                    <button class="btn" onclick="openModal(this)">Reporte de Falla</button>
+                    <div class="report-status hidden"></div>
+                </td>
+                <td>Sin Respuesta</td>
+                <td>
+                    <button class="btn" onclick="openCopyModal(this)">Copiar</button>
+                    <button class="btn" onclick="deleteAccount(this)">Eliminar</button>
+                    <button class="btn" onclick="consultReport(this)">Consultar</button>
+                </td>
+            `;
+            tableBody.appendChild(newRow);
+
+            allRows.push(newRow.cloneNode(true));
+            saveToLocalStorage();
+        }
+
+        function updateStatus(input) {
+            const row = input.closest('tr');
+            const statusCell = row.cells[3];
+            const saleAndExpirationCell = row.cells[5];
+            const buyerEmail = input.value;
+            if (buyerEmail.includes('@')) {
+                statusCell.textContent = 'Vendida';
+                statusCell.classList.remove('status-available');
+                statusCell.classList.add('status-sold');
+                
+                const saleDate = new Date();
+                const saleDateString = saleDate.toLocaleString();
+
+                const expirationDate = new Date(saleDate);
+                expirationDate.setDate(expirationDate.getDate() + 30);
+                const expirationDateString = expirationDate.toLocaleDateString();
+
+                saleAndExpirationCell.textContent = `Fecha de Venta: ${saleDateString}, Fecha de Vencimiento: ${expirationDateString}`;
+            } else {
+                statusCell.textContent = 'Disponible';
+                statusCell.classList.remove('status-sold');
+                statusCell.classList.add('status-available');
+                saleAndExpirationCell.textContent = '';
+            }
+            saveToLocalStorage();
+        }
+
+        function openCopyModal(button) {
+            currentRow = button.closest('tr');
+            document.getElementById('copyModal').style.display = "block";
+        }
+
+        function closeCopyModal() {
+            document.getElementById('copyModal').style.display = "none";
+        }
+
+        function copyAccountData() {
+            const row = currentRow;
+            const accountData = row.cells[0].textContent;
+            const purchaseDate = row.cells[2].textContent;
+            const buyerEmail = row.cells[4].querySelector('input[type="email"]').value;
+            const buyerPhone = row.cells[4].querySelector('input[type="tel"]').value;
+            const saleAndExpiration = row.cells[5].textContent;
+
+            const dataToCopy = `
+                Datos de la Cuenta: ${accountData}
+                Fecha de Compra: ${purchaseDate}
+                Correo del Comprador: ${buyerEmail}
+                Teléfono del Comprador: ${buyerPhone}
+                ${saleAndExpiration}
+                Gracias por su compra.
+            `;
+
+            navigator.clipboard.writeText(dataToCopy).then(() => {
+                alert('VENDE Y GANA INFORMA: Datos copiados al portapapeles');
+            });
+            closeCopyModal();
+        }
+
+        function copyFailureReport() {
+            const row = currentRow;
+            const reportText = row.cells[6].querySelector('.report-status').classList.contains('hidden') ? "" : row.cells[6].querySelector('.report-status').innerText;
+            const responseText = row.cells[7].textContent.split(' (Respondido por ')[0]; // Remove the timestamp from the response
+
+            const dataToCopy = `
+                Reporte de Falla: ${reportText}
+                Respuesta a la Falla: ${responseText}
+                OFRECEMOS DISCULPAS POR LAS MOLESTIAS OCASIONADAS, GRACIAS POR SU PACIENCIA. 😊📞
+            `;
+
+            navigator.clipboard.writeText(dataToCopy).then(() => {
+                alert('VENDE Y GANA INFORMA: Datos copiados al portapapeles');
+            });
+            closeCopyModal();
+        }
+
+        function deleteAccount(button) {
+            const row = button.closest('tr');
+            const index = allRows.findIndex(r => r.isEqualNode(row));
+            if (index > -1) {
+                allRows.splice(index, 1);
+            }
+            row.remove();
+            saveToLocalStorage();
+        }
+
+        function filterAccounts() {
+            const filter = document.getElementById('filter').value.toLowerCase();
+            const filterDate = document.getElementById('filter-date').value;
+
+            const tableBody = document.getElementById('accounts-body');
+            tableBody.innerHTML = '';
+
+            allRows.forEach(row => {
+                const accountData = row.cells[0].textContent.toLowerCase();
+                const purchaseDate = row.cells[2].textContent.split(',')[0]; // Obtener solo la parte de la fecha
+                const buyerEmail = row.cells[4].querySelector('input[type="email"]').value.toLowerCase();
+                const buyerPhone = row.cells[4].querySelector('input[type="tel"]').value.toLowerCase();
+                const matchesFilter = accountData.includes(filter) || buyerEmail.includes(filter) || buyerPhone.includes(filter);
+                const matchesDate = filterDate === '' || purchaseDate === filterDate;
+                if (matchesFilter && matchesDate) {
+                    tableBody.appendChild(row);
+                }
+            });
+        }
+
+        function openModal(button) {
+            currentRow = button.closest('tr');
+            document.getElementById('myModal').style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById('myModal').style.display = "none";
+        }
+
+        function saveFailureReport() {
+            const reportText = document.getElementById('failure-report').value;
+            const reportDate = new Date().toLocaleString();
+            currentRow.cells[6].querySelector('.report-status').innerText = `Reporte: ${reportText} (Reportado el ${reportDate})`;
+            currentRow.cells[6].querySelector('.report-status').classList.remove('hidden');
+            currentRow.cells[6].querySelector('.report-status').classList.add('response-pending');
+            currentRow.cells[7].innerText = 'Pendiente de Respuesta';
+            currentRow.cells[7].classList.add('response-pending');
+            saveToLocalStorage();
+        }
+
+        function saveFailureResponse() {
+            const responseText = document.getElementById('failure-response').value;
+            const executiveName = document.getElementById('executive-name').value;
+            const responseDate = new Date().toLocaleString();
+            currentRow.cells[7].innerText = `${responseText} (Respondido por ${executiveName} el ${responseDate})`;
+            currentRow.cells[7].classList.remove('response-pending');
+            currentRow.cells[7].classList.add('response-complete');
+            saveToLocalStorage();
+            closeModal();
+        }
+
+        function consultReport(button) {
+            const row = button.closest('tr');
+            const reportStatus = row.cells[6].querySelector('.report-status').classList.contains('hidden') ? "Sin reporte de falla" : 
+                `Falla Reportada: ${row.cells[6].querySelector('.report-status').innerText} - Respuesta: ${row.cells[7].textContent}`;
+            alert('VENDE Y GANA INFORMA: ' + reportStatus);
+        }
+
+        function saveToLocalStorage() {
+            const data = allRows.map(row => ({
+                accountData: row.cells[0].textContent,
+                providerData: row.cells[1].textContent,
+                purchaseDate: row.cells[2].textContent,
+                status: row.cells[3].textContent,
+                buyerEmail: row.cells[4].querySelector('input[type="email"]').value,
+                buyerPhone: row.cells[4].querySelector('input[type="tel"]').value,
+                saleAndExpiration: row.cells[5].textContent,
+                reportText: row.cells[6].querySelector('.report-status').innerText,
+                responseText: row.cells[7].textContent,
+            }));
+            localStorage.setItem('accounts', JSON.stringify(data));
+        }
+
+        function loadAccounts() {
+            const data = JSON.parse(localStorage.getItem('accounts'));
+            if (data) {
+                const tableBody = document.getElementById('accounts-body');
+                data.forEach(item => {
+                    const newRow = document.createElement('tr');
+                    newRow.innerHTML = `
+                        <td>${item.accountData}</td>
+                        <td>${item.providerData}</td>
+                        <td>${item.purchaseDate}</td>
+                        <td class="${item.status === 'Disponible' ? 'status-available' : 'status-sold'}">${item.status}</td>
+                        <td>
+                            <input type="email" placeholder="Correo del Comprador" value="${item.buyerEmail}" oninput="updateStatus(this)">
+                            <input type="tel" placeholder="Teléfono del Comprador" value="${item.buyerPhone}">
+                        </td>
+                        <td>${item.saleAndExpiration}</td>
+                        <td>
+                            <button class="btn" onclick="openModal(this)">Reporte de Falla</button>
+                            <div class="report-status ${item.reportText ? 'response-pending' : 'hidden'}">${item.reportText}</div>
+                        </td>
+                        <td class="${item.responseText.includes('Pendiente de Respuesta') ? 'response-pending' : 'response-complete'}">${item.responseText}</td>
+                        <td>
+                            <button class="btn" onclick="openCopyModal(this)">Copiar</button>
+                            <button class="btn" onclick="deleteAccount(this)">Eliminar</button>
+                            <button class="btn" onclick="consultReport(this)">Consultar</button
